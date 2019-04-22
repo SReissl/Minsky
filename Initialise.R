@@ -1,9 +1,9 @@
 initnames=c("Y","E_b","D_h","E_fk","YD","V_h")
 inits<-array(data=NA, dim=c(1,length(initnames)),dimnames = list(NULL,initnames))
-parnames=c("alpha1","alpha2","psi","theta","w","delta","r_d","mu1","mu2","r_0","iota1","iota2","lambda1","kappa","chi","beta1","beta2","pi","gamma","expdyn","opt","pes","epsilon","eta","rho","tau","lambda2","gov","phi_g","u_n","phi_b","bank","sigma","omega")
+parnames=c("alpha1","alpha2","psi","theta","w","delta","r_d","mu1","mu2","r_0","iota1","iota2","lambda1","kappa","chi","beta1","beta2","pi","gamma","expdyn","opt","pes","epsilon","eta","rho","tau","lambda2","gov","phi_g","u_n","phi_b","bank","sigma","omega","fshare","types","psi_e")
 params<-array(data=NA, dim=c(1,length(parnames)),dimnames = list(NULL,parnames))
 nF=100
-firminitnames=c("k","K","omega_c","L","r_L","share","D_f","C","E_fc","p_c","gamma")
+firminitnames=c("k","K","omega_c","L","r_L","share","D_f","C","E_fc","p_c","gamma","yield")
   
 firminits<-array(data=NA,dim=c(nF,length(firminitnames)),dimnames=list(NULL,firminitnames))
 init=function(init=inits,param=params,firminit=firminits){
@@ -58,7 +58,6 @@ init=function(init=inits,param=params,firminit=firminits){
   alpha1=0.85
   alpha2=(YD-alpha1*YD)/(D_h+E_b+sum(E_fc))
   V_h=D_h+sum(E_fc)+E_b
-  V_he=V_h
   lambda1=0.95
   iota1=-3
   iota2=1
@@ -93,6 +92,9 @@ init=function(init=inits,param=params,firminit=firminits){
   phi_b=0.2
   bank=0
   sigma=5
+  fshare=0
+  types=1
+  psi_e=0
     
   init[1,1]<-Y
   init[1,2]<-E_b
@@ -100,7 +102,6 @@ init=function(init=inits,param=params,firminit=firminits){
   init[1,4]<-E_fk
   init[1,5]<-YD
   init[1,6]<-V_h
-
 
   firminit[,1]<-k
   firminit[,2]<-K
@@ -113,6 +114,7 @@ init=function(init=inits,param=params,firminit=firminits){
   firminit[,9]<-E_fc
   firminit[,10]<-p_c
   firminit[,11]<-gamma
+  firminit[,12]<-yield
   
   param[1,1]<-alpha1
   param[1,2]<-alpha2
@@ -148,6 +150,9 @@ init=function(init=inits,param=params,firminit=firminits){
   param[1,32]<-bank
   param[1,33]<-sigma
   param[1,34]<-omega
+  param[1,35]<-fshare
+  param[1,36]<-types
+  param[1,37]<-psi_e
   
   return(list(init=init,param=param,firminit=firminit))
 } 

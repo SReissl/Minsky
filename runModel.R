@@ -1,10 +1,10 @@
-source("MinskyParallel.R")
+source("Model.R")
 library(foreach)
 library(doParallel)
 ncores<-detectCores()
-cl<-makeCluster((ncores-3), outfile="")
+cl<-makeCluster((1), outfile="")
 registerDoParallel(cl)
-mc=50
+mc=1
 writeLines(c(""), "log.txt")
 
 foreach(m=1:mc) %dopar% {
@@ -13,13 +13,12 @@ cat(paste("Starting iteration",m,"\n"))
 sink()
 library(abind)
 library(rootSolve)
-source("MinskyInitsNew4.R")
+source("Initialise.R")
 initreturn<-init()
 inits<-initreturn$init
 params<-initreturn$param
 firminits<-initreturn$firminit
-params[1,"iota2"]=1.5
-runModel(seed=m,nF=100,Time=2000,nrun=80)
+runModel(seed=(m),nF=100,Time=2000,nrun=80)
 }
 
 stopCluster(cl)

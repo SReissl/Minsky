@@ -1,4 +1,4 @@
-runModel<-function(seed=1,nF=100,Time = 2000,nrun=80,foldername="Sensitivitydata/"){
+runModel<-function(seed=1,nF=100,Time = 2000,nrun=80,foldername="Testdata/"){
   library(abind)
   library(rootSolve)
   ###Argument list
@@ -11,11 +11,11 @@ runModel<-function(seed=1,nF=100,Time = 2000,nrun=80,foldername="Sensitivitydata
   #####Sectoral Structure####
   
   # HH column names
-  HNames<-c("V_h","V_he","YD","YD_e","E_f","W","Div_f","sav_h","c_d","D_h")
+  HNames<-c("V_h","YD","YD_e","E_f","W","Div_f","sav_h","c_d","D_h")
   Households<-array(data = NA, dim=c(args$Time/args$nrun+10,length(HNames)),dimnames = list(NULL,HNames))
   
   # C-Firm column names (ABM)
-  CFNames<-c("V_fc","K","k","D_f","L","E_fc","i","I","N_dc","W_c","Div_fc","iL","rep_L","sav_fc","p_c","Pr_fc","c","C","share","c_d","r_L","Q","omega_c","p_dkint","u","p_rel","k_rel","int","CF","deltaK","root","bankrupt","mu1","gamma","share_shock","yield","attitude","index","sentiment")
+  CFNames<-c("V_fc","K","k","D_f","L","E_fc","i","I","N_dc","W_c","Div_fc","iL","rep_L","sav_fc","p_c","Pr_fc","c","C","share","c_d","r_L","Q","omega_c","p_dkint","u","p_rel","k_rel","int","CF","deltaK","root","bankrupt","mu1","gamma","share_shock","yield","attitude","index","sentiment","Q_f","Q_e","type")
   Cfirms<-array(data = NA,dim=c(args$Time/args$nrun+10,length(CFNames),args$nF),dimnames = list(NULL,CFNames,NULL))
   
   # C-Firm column names (Agg)
@@ -34,6 +34,9 @@ runModel<-function(seed=1,nF=100,Time = 2000,nrun=80,foldername="Sensitivitydata
   AuxNames<-c("SFCcheck1","SFCcheck2","recap","defaults","counter","def_liqu","def_equ")
   Aux<-array(data = NA, dim=c(args$Time/args$nrun+10,length(AuxNames)),dimnames = list(NULL,AuxNames))
   
+  #Estimation
+  Est<-array(data=NA,dim=c(args$Time+10,1,args$nF),dimnames=list(NULL,"yield",NULL))
+  
   #####Data Frames#####
   datanames<-c(HNames,CFNamesagg,KFNames,BNames,AuxNames)
   output<-as.data.frame(array(data = NA, dim=c((args$Time+10),length(datanames)),dimnames = list(NULL,datanames)))
@@ -47,7 +50,6 @@ runModel<-function(seed=1,nF=100,Time = 2000,nrun=80,foldername="Sensitivitydata
     Households[1,"YD"]<-inits[[1,"YD"]]
     Households[1,"YD_e"]<-inits[[1,"YD"]]
     Households[1,"V_h"]<-inits[[1,"V_h"]]
-    Households[1,"V_he"]<-inits[[1,"V_h"]]
     Kfirms[1,"E_fk"]<-inits[[1,"E_fk"]]
     Banks[1,"E_b"]<-inits[[1,"E_b"]]
     Cfirmsagg[1,"Y"]<-inits[[1,"Y"]]
@@ -69,6 +71,18 @@ runModel<-function(seed=1,nF=100,Time = 2000,nrun=80,foldername="Sensitivitydata
     Cfirms[1,"bankrupt",]<-0
     Cfirms[1,"gamma",]<-firminits[,"gamma"]
     Cfirms[1,"share_shock",]<-1
+    if(params[1,"types"]==1){
+    Cfirms[1,"yield",]<-firminits[,"yield"]*(params[1,"r_d"]+params[1,"delta"])
+    Est[1,"yield",]<-firminits[,"yield"]
+    for(i in 1:args$nF){
+    type=runif(1)
+    if(type>params[1,"fshare"]){
+    Cfirms[1,"type",i]=0
+    }else{
+    Cfirms[1,"type",i]=1
+    }
+    }
+    }
   
     #####THIS IS THE PERIOD REPETITION WITHIN 1 MONTE CARLO SIMULATION#####
     r=1
@@ -104,21 +118,22 @@ runModel<-function(seed=1,nF=100,Time = 2000,nrun=80,foldername="Sensitivitydata
       Cfirms<-setCprice(Cfirms=Cfirms,params=params,args=args,Timer=Timer)
       Cfirmsagg<-calculateCPI(Cfirmsagg=Cfirmsagg,Cfirms=Cfirms,params=params,args=args)
       Kfirms<-setKprice(Kfirms=Kfirms,Cfirmsagg=Cfirmsagg,params=params,args=args)
-      Households<-buildExpectationHH(Households=Households,params=params,args=args)
       Households<-decideConsumption(Households=Households,Cfirmsagg=Cfirmsagg,params=params,args=args)
       Cfirms<-distributeConsumption(Cfirms=Cfirms,Households=Households,params=params,args=args)
       Cfirms<-cProduction(Households=Households,Cfirms=Cfirms,params=params,args=args)
-      YieldReturn<-estimateYield(Cfirms=Cfirms,Cfirmsagg=Cfirmsagg,params=params,args=args,Timer=Timer)
+      YieldReturn<-estimateYield(Cfirms=Cfirms,Est=Est,Cfirmsagg=Cfirmsagg,params=params,args=args,Timer=Timer)
       Cfirms<-YieldReturn$Cfirms
       Cfirmsagg<-YieldReturn$Cfirmsagg
+      Est<-YieldReturn$Est
       Cfirms<-Invest(Cfirms=Cfirms,Banks=Banks,Cfirmsagg=Cfirmsagg,Kfirms=Kfirms,params=params,args=args,Timer=Timer,firminits=firminits)
       Cfirms<-updateCapital2(Kfirms=Kfirms,Cfirms=Cfirms,params=params,args=args)
       Kfirms<-supplyCapital(Kfirms=Kfirms,Cfirms=Cfirms,params=params,args=args)
       Cfirms<-profitCfirms(Cfirms=Cfirms,params=params,args=args)
-      bankruptcyReturns<-bankruptcyDividends(Cfirms=Cfirms,Kfirms=Kfirms,Banks=Banks,Aux=Aux,params=params,args=args,Timer=Timer,firminits=firminits)
+      bankruptcyReturns<-bankruptcyDividends(Cfirms=Cfirms,Est=Est,Kfirms=Kfirms,Banks=Banks,Aux=Aux,params=params,args=args,Timer=Timer,firminits=firminits)
       Cfirms<-bankruptcyReturns$Cfirms
       Aux<-bankruptcyReturns$Aux
       Kfirms<-bankruptcyReturns$Kfirms
+      Est<-bankruptcyReturns$Est
       Cfirms<-Cfsave(Cfirms=Cfirms,params=params,args=args)
       Cfirmsagg<-Cfaggregates(Cfirmsagg=Cfirmsagg,Cfirms=Cfirms,params=params,args=args)
       Banks<-bankStocks1(Banks=Banks,Cfirmsagg=Cfirmsagg,params=params,args=args)
@@ -171,7 +186,7 @@ runModel<-function(seed=1,nF=100,Time = 2000,nrun=80,foldername="Sensitivitydata
       }
       }
   Modelreturns<-list(output=output,Cfirmsav=Cfirmsav,Cfirms=Cfirmssel,CFNames=CFNames)
-  filename<-paste("dataiota21.5","mc",seed,sep="")
+  filename<-paste("data","mc",seed,sep="")
   save(Modelreturns,file = paste(foldername,filename, ".Rdata", sep=''))
 }
 
@@ -244,13 +259,8 @@ SFCcheck<-function(Households=stop("need to have households defined!"),Cfirmsagg
 ####Equations
 ####Households####
 decideConsumption<-function(Households=stop("need to have households defined!"),Cfirmsagg=stop("need to have Cfirms (agg) defined!"),params=params,args=args){
-  Households[[args$t,"c_d"]]=((params[[1,"alpha1"]]*Households[[args$t,"YD_e"]]+params[[1,"alpha2"]]*Households[[args$t,"V_he"]])/Cfirmsagg[[args$t,"CPI"]])
-  return(Households)
-}
-
-buildExpectationHH<-function(Households=stop("need to have households defined!"),params=params,args=args){
   Households[[args$t,"YD_e"]]=Households[[(args$t-1),"YD_e"]]+params[[1,"psi"]]*(Households[[(args$t-1),"YD"]]-Households[[(args$t-1),"YD_e"]])
-  Households[[args$t,"V_he"]]=Households[[(args$t-1),"V_he"]]+params[[1,"psi"]]*(Households[[(args$t-1),"V_h"]]-Households[[(args$t-1),"V_he"]])
+  Households[[args$t,"c_d"]]=((params[[1,"alpha1"]]*Households[[args$t,"YD_e"]]+params[[1,"alpha2"]]*Households[[(args$t-1),"V_h"]])/Cfirmsagg[[args$t,"CPI"]])
   return(Households)
 }
 
@@ -306,10 +316,30 @@ setCprice<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),params=par
   return(Cfirms)
 }
 
-estimateYield<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),Cfirmsagg=stop("need to have Cfirms (agg) defined!"),params=params,args=args,Timer=Timer){
+
+estimateYield<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),Est=stop("need to have Est-array defined!"),Cfirmsagg=stop("need to have Cfirms (agg) defined!"),params=params,args=args,Timer=Timer){
   Cfirmsagg[[args$t,"CF"]]=sum(Cfirms[args$t,"CF",])
   Cfirmsagg[[args$t,"K"]]=sum(Cfirms[args$t,"K",])
   Cfirmsagg[[args$t,"iL"]]=sum(Cfirms[args$t,"iL",])
+  if(params[1,"types"]==1){
+  for(i in 1:args$nF){
+  Cfirms[args$t,"type",i]=Cfirms[(args$t-1),"type",i]
+  Cfirms[args$t,"yield",i]=((Cfirms[args$t,"c_d",i]*Cfirms[(args$t),"p_c",i]-params[[1,"w"]]*Cfirms[args$t,"c_d",i]))
+  Est[Timer,"yield",i]=Cfirms[args$t,"yield",i]/(params[1,"r_d"]+params[1,"delta"])
+  Cfirms[args$t,"Q_f",i]=sum(Est[1:Timer,"yield",i])/sum(!!Est[1:Timer,"yield",i])
+  if(Cfirms[(args$t-1),"bankrupt",i]==0){
+  Cfirms[args$t,"Q_e",i]=(Cfirms[args$t,"yield",i]+params[1,"psi_e"]*(Cfirms[args$t,"yield",i]-Cfirms[(args$t-1),"yield",i]))/(params[1,"r_d"]+params[1,"delta"])
+  }else{
+  Cfirms[args$t,"Q_e",i]=(Cfirms[args$t,"yield",i])/(params[1,"r_d"]+params[1,"delta"])
+  }
+  if(Cfirms[args$t,"type",i]==1){
+  Cfirms[args$t,"Q",i]=Cfirms[args$t,"Q_f",i]
+  }else{
+  Cfirms[args$t,"Q",i]=Cfirms[args$t,"Q_e",i]
+  }
+  Cfirms[args$t,"mu1",i]=params[1,"mu1"]*(max(0.001,(2/(1+exp(-(((Cfirms[(args$t),"iL",i]+Cfirms[(args$t),"rep_L",i])/Cfirms[(args$t),"CF",i])*params[1,"beta1"]-params[1,"beta2"]*((Cfirms[(args$t),"CF",i]-Cfirms[(args$t),"iL",i])*4/Cfirms[(args$t-1),"K",i])))))))
+  }
+  }else{
   for(i in 1:args$nF){
   Cfirms[[args$t,"index",i]]=params[1,"rho"]*(Cfirms[args$t,"CF",i]-Cfirms[args$t,"iL",i])*4/Cfirms[args$t,"K",i]+(1-params[1,"rho"])*(Cfirmsagg[args$t,"CF"]-Cfirmsagg[args$t,"iL"])*4/Cfirmsagg[args$t,"K"]
   Cfirms[args$t,"sentiment",i]=1/(1+exp(params[1,"eta"]*(Cfirms[[args$t,"index",i]]-params[1,"pi"])))
@@ -327,20 +357,13 @@ estimateYield<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),Cfirms
   Cfirms[args$t,"yield",i]=Cfirms[args$t,"yield",i]*params[1,"pes"]
   }}
   else{
-  if(Timer>2){
-  Cfirms[args$t,"yield",i]=((Cfirms[args$t,"c_d",i]*Cfirms[(args$t),"p_c",i]-params[[1,"w"]]*Cfirms[args$t,"c_d",i]))*(1+(Cfirmsagg[(args$t-1),"Y"]-Cfirmsagg[(args$t-2),"Y"])/Cfirmsagg[(args$t-2),"Y"])
-  }else{
   Cfirms[args$t,"yield",i]=((Cfirms[args$t,"c_d",i]*Cfirms[(args$t),"p_c",i]-params[[1,"w"]]*Cfirms[args$t,"c_d",i]))
   }
-  }
   Cfirms[args$t,"Q",i]=(Cfirms[args$t,"yield",i])/(params[1,"r_d"]+params[1,"delta"])
-  if(Timer>2){
   Cfirms[args$t,"mu1",i]=params[1,"mu1"]*(max(0.001,(2/(1+exp(-(((Cfirms[(args$t),"iL",i]+Cfirms[(args$t),"rep_L",i])/Cfirms[(args$t),"CF",i])*params[1,"beta1"]-params[1,"beta2"]*((Cfirms[(args$t),"CF",i]-Cfirms[(args$t),"iL",i])*4/Cfirms[(args$t-1),"K",i])))))))
-  }else{
-  Cfirms[args$t,"mu1",i]=params[1,"mu1"]
   }
   }
-  return(list(Cfirms=Cfirms,Cfirmsagg=Cfirmsagg))
+  return(list(Cfirms=Cfirms,Cfirmsagg=Cfirmsagg,Est=Est))
 }
 
 
@@ -455,7 +478,7 @@ profitCfirms<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),params=
   return(Cfirms)
 }
 
-bankruptcyDividends<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),Kfirms=stop("need to have K-Firms defined!"),Banks=stop("need to have Banks defined!"),Aux=stop("need to have Aux Array defined!"),params=params,args=args,Timer=Timer,firminits=firminits){
+bankruptcyDividends<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),Est=stop("need to have Est-array defined!"),Kfirms=stop("need to have K-Firms defined!"),Banks=stop("need to have Banks defined!"),Aux=stop("need to have Aux Array defined!"),params=params,args=args,Timer=Timer,firminits=firminits){
   Aux[[args$t,"counter"]]=Aux[[(args$t-1),"counter"]]
   Aux[[args$t,"defaults"]]=0
   Aux[[args$t,"recap"]]=0
@@ -498,6 +521,7 @@ bankruptcyDividends<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),
   Cfirms[[args$t,"share_shock",i]]=1
   Cfirms[[args$t,"Div_fc",i]]=0
   Cfirms[[args$t,"r_L",i]]=Banks[[(args$t-1),"r_0"]]
+  Est[1:Timer,"yield",i]<-mean(Est[1:Timer,"yield",])
   }else{
   if(Timer>6 && mean(Cfirms[(args$t-5):args$t,"share",i])<0.0001 && mean(Cfirms[(args$t-5):args$t,"bankrupt",i])==0){
   Cfirms[[args$t,"bankrupt",i]]=1
@@ -527,6 +551,7 @@ bankruptcyDividends<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),
   Cfirms[[args$t,"share_shock",i]]=1
   Cfirms[[args$t,"Div_fc",i]]=0
   Cfirms[[args$t,"r_L",i]]=Banks[[(args$t-1),"r_0"]]
+  Est[1:Timer,"yield",i]<-mean(Est[1:Timer,"yield",])
   }
   else{
   #pay dividends
@@ -543,7 +568,7 @@ bankruptcyDividends<-function(Cfirms=stop("need to have Cfirms (ABM) defined!"),
   }
   }}}
   Cfirms[args$t,"V_fc",]=Cfirms[args$t,"K",]+Cfirms[args$t,"D_f",]-Cfirms[args$t,"L",]-Cfirms[args$t,"E_fc",]
-  return(list(Aux=Aux,Cfirms=Cfirms,Kfirms=Kfirms))
+  return(list(Aux=Aux,Cfirms=Cfirms,Kfirms=Kfirms,Est=Est))
 }
 
 calculateCPI<-function(Cfirmsagg=stop("need to have Cfirms (agg) defined!"),Cfirms=stop("need to have Cfirms (ABM) defined!"),params=params,args=args){
