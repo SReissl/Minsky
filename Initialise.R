@@ -98,7 +98,7 @@ init=function(init=inits,param=params,firminit=firminits,calib=calib){
   fulloutput=1
   divpol=0
   phi_b2=0.9
-  phi_div=7
+  phi_div=8
 
   init[1,1]<-Y
   init[1,2]<-E_b
